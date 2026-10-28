@@ -92,6 +92,11 @@ Because the feature code lives in `noisedx/`, training, serving and visualisatio
 
 ## Use of AI tools
 
-> **Edit before submitting.** The course policy requires you to say how AI was used. Fill this in honestly, e.g.:
-> "Claude (Anthropic) generated the initial code scaffold and draft app text from my CSCI 6364 proposal. I reviewed,
-> ran and edited it, and I made these changes myself: …"
+As the DATS 6401 AI policy requires, I am disclosing that I used AI tools (Claude, from Anthropic) throughout this
+project. Claude helped write code, app text, documentation and the beginner guide in `docs/`, and helped check numbers
+against the generated data.
+
+The project itself is mine. The topic, research questions and dataset plan come from my own CSCI 6364 machine-learning
+project, *Something Sounds Off*, which I developed with my teammate. I reviewed the files and chose what to keep or
+drop, reviewed each cell and chart, and followed the course's weekly schedule for the mid-term. I can explain each part
+of the app and the code in my own words.
