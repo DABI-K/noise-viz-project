@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide · How the Something Sounds Off App Works</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+:root { --bg:#ffffff; --fg:#111111; --muted:#5b6470; --accent:#1d5fa8; --card:#ffffff;
+        --border:#e3e0d8; --code:#f2f0ea; --tip:#eef6ee; --tipb:#4c9a52; --warn:#fdf3e4; --warnb:#c98a1b; }
+html,body { background:var(--bg); color:var(--fg); }
+body { margin:0; font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 80px; }
+h1 { font-size: 1.9em; line-height:1.2; margin-top: 0.4em; }
+h2 { margin-top: 2em; padding-bottom: .25em; border-bottom: 2px solid var(--border); }
+h3 { margin-top: 1.6em; color: var(--accent); }
+a { color: var(--accent); }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+pre code { padding: 0; background: none; }
+table { border-collapse: collapse; margin: 1em 0; display:block; overflow-x:auto; max-width:100%; }
+th, td { border: 1px solid var(--border); padding: 6px 10px; vertical-align: top; }
+th { background: var(--code); text-align: left; }
+blockquote { margin: 1em 0; padding: 10px 16px; background: var(--tip); border-left: 4px solid var(--tipb); border-radius: 6px; }
+blockquote.warn { background: var(--warn); border-left-color: var(--warnb); }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+details { background: var(--card); border:1px solid var(--border); border-radius:8px; padding: 8px 14px; margin: 10px 0; }
+summary { cursor: pointer; font-weight: 600; }
+img, svg { max-width: 100%; }
+</style>
+</head>
+<body>
+<main id="content"></main>
+<script id="md" type="text/plain"># Guide · How the "Something Sounds Off" App Works
+
+Time: about 1.5 hours if you read everything and click along in the app. No math background needed. Every new word is defined the first time it appears, and the full word list is in Part 1.
+
+**How to use this guide:** start the app (Part 2 shows how), keep it open next to this page, and follow along tab by tab.
+
+---
+
+## Part 0 · The 60-second version
+
+**What the project is about.** When people record their voice, four things commonly go wrong:
+
+| Problem | What you hear | What causes it | The fix an editor uses |
+|---|---|---|---|
+| **Wind rumble** | low "whooshing" thumps | wind hitting the microphone | high-pass filter (removes low sounds) |
+| **Mains hum** | a steady low buzz | bad electrical grounding (power lines run at 50 or 60 cycles per second) | notch filter (removes one exact pitch) |
+| **Digital clipping** | crunchy, distorted loud parts | speaking too loud for the microphone's limit | de-clipper |
+| **Background noise** | constant "shhh" from fans, traffic, rain | the room | noise reduction |
+
+Your CSCI 6364 ML project wants a computer to listen to a 3-second clip and say which one it is (or "clean"). This DATS 6401 app **does not train any model yet**. Instead it *looks at the data* four different ways, so you understand the defects before training anything.
+
+**The four ways of looking (the four "modalities"):**
+
+1. **Time series:** the sound as a wiggly line over time (tab 2).
+2. **Images:** the sound as a picture called a spectrogram (tab 3).
+3. **Tabular:** each clip turned into a row of 38 numbers (tab 4).
+4. **Network:** dots connected by lines, showing which numbers move together and which classes look alike (tab 5).
+
+A **modality** just means "type of data." The course is organised by modality (week 3 tabular, week 4 time series, week 6 networks, week 8 images), and the mid-term requires at least three. We have four.
+
+**The pipeline in one line:**
+
+> Download real audio → mix defects into clean speech → measure each clip (38 numbers + a picture) → save to files → the Streamlit app reads those files and draws charts.
+
+---
+
+## Part 1 · Words you need (the glossary)
+
+Read this once now. Come back whenever a word confuses you.
+
+### Sound words
+
+- **Waveform:** the raw recording. A microphone measures air pressure thousands of times per second; plotting those measurements over time gives a wiggly line.
+- **Sample:** one of those measurements. **Sample rate** = how many per second. We use **22,050 Hz**, meaning 22,050 samples every second, so one 3-second clip is 66,150 numbers.
+- **Hz (hertz):** "times per second." Used for sample rate *and* for pitch. Low pitch (a bass drum) is around 50–200 Hz; high pitch (the "s" sound) is 4,000–8,000 Hz.
+- **Amplitude:** how far the waveform swings up or down at a moment, scaled between −1 and +1. Bigger swings mean louder sound.
+- **Peak:** the single largest amplitude in the clip.
+- **RMS (root mean square):** the *average* loudness. You square every sample, average them, then take the square root. Think "typical level," not "loudest moment."
+- **dB (decibel):** a log scale for loudness. Every −20 dB means the amplitude is 10 times smaller. 0 dB here means "the loudest thing in this clip," so values are negative (−80 dB is nearly silent).
+- **Frequency / spectrum:** any sound can be split into a mix of pure pitches. The **spectrum** says how much energy is at each pitch.
+- **Spectrogram:** a picture of the spectrum changing over time. **x-axis = time, y-axis = pitch (low at the bottom), brightness = energy.**
+- **Mel scale / log-mel spectrogram:** humans hear differences between low pitches much better than between high pitches. The mel scale squeezes the high pitches together to match. Our spectrograms have **64 mel bands** (64 rows), and brightness is in dB, which is why we call them "log-mel."
+- **Harmonics:** whole-number multiples of a base pitch. A 60 Hz hum also has energy at 120, 180 and 240 Hz.
+- **SNR (signal-to-noise ratio):** how much louder the speech is than the defect, in dB. **10 dB SNR** means the speech is about 3 times louder (in amplitude) than the noise. **Lower SNR = worse defect.** 0 dB means equal loudness, and negative means the noise is louder than the speech.
+- **Reverb / room echo:** reflections off walls. Simulated with an **impulse response (IR)**, which is the "echo fingerprint" of a room. **RT60** = how many seconds the echo takes to fade (by 60 dB).
+
+### The 38 features (what we measure from each clip)
+
+A **feature** is one number that describes something about a clip. Your proposal lists these:
+
+- **MFCCs (mel-frequency cepstral coefficients), 13 of them:** a compact summary of the *shape* of the spectrum, like a fingerprint of the sound's "colour." MFCC 1 mostly tracks overall loudness; higher numbers capture finer detail. For each MFCC we keep the **mean** (average over the clip) and the **variance** (how much it changes over the clip). 13 × 2 = **26 numbers**.
+- **Spectral contrast, 7 bands:** splits the pitch range into 7 bands and asks "how much taller are the peaks than the valleys?" in each. Speech has high contrast; noise has low contrast. **7 numbers.** `contrast7` is the highest-pitch band.
+- **Spectral centroid:** the "centre of mass" of the spectrum in Hz. Low = dark, boomy sound (wind, hum). High = bright, hissy sound (noise).
+- **Spectral roll-off:** the pitch below which 85% of the energy sits.
+- **Spectral flatness:** 0 = one pure tone (like hum); 1 = all pitches equally (like static).
+- **ZCR (zero-crossing rate):** how often the waveform crosses the zero line. Hissy sounds cross very often.
+- **Crest factor:** peak ÷ RMS. Clipping chops off the peaks, so the crest factor **drops**. This is the clipping detector.
+
+Those last 5 plus the 26 and the 7 add up to **38**.
+
+$$\text{crest factor} = \frac{\text{peak}}{\text{RMS}}$$
+
+### Data and ML words
+
+- **Synthetic defect:** a defect we *add with code* rather than record for real.
+- **Data augmentation:** making extra training examples by altering existing ones, here by mixing defects into clean speech.
+- **Narrow vs diverse strategy:** two ways of making the synthetic data (Part 3). Narrow = always the same conditions. Diverse = randomised conditions.
+- **Domain randomisation:** the idea (from robotics) that training on very varied fake data helps a model work in the real world. This is hypothesis **H2** of your proposal.
+- **Speaker-disjoint split:** the test clips use speakers who never appear in the training clips, so a model can't cheat by memorising voices.
+- **Class:** one of the 5 categories (clean, wind, hum, clipping, noise). **Label** = the class of a specific clip.
+- **Standardise / z-score:** rescale a feature so its average is 0 and its spread is 1. Then a value of +2 means "2 standard deviations above average," and features in Hz and features near 0.01 become comparable.
+
+$$z = \frac{x - \text{mean}}{\text{standard deviation}}$$
+
+- **Standard deviation (SD):** the typical distance of values from their average.
+- **PCA (principal component analysis):** squashes 38 numbers down to 2 so you can plot them, keeping as much of the spread as possible. Axes are called PC1, PC2, and the label shows what % of the spread each one keeps.
+- **t-SNE:** another squashing method that keeps *neighbours* close. Good for seeing clusters, but distances between clusters mean nothing.
+- **Correlation (r):** from −1 to +1. +1 means two features always rise together, −1 means one rises when the other falls, and 0 means no relationship.
+- **Network / graph:** **nodes** (dots) joined by **edges** (lines).
+- **Community detection:** an algorithm that finds groups of nodes that are more connected to each other than to the rest. We use **greedy modularity**, which repeatedly merges groups if that makes the groups tighter.
+- **ANOVA F-score:** one number per feature saying how well that feature separates the 5 classes. Big F means the class averages are far apart compared with the spread inside each class.
+- **k-nearest neighbours (k-NN):** for each clip, find the k most similar clips (closest in the 38-number space).
+- **Shortcut learning:** when a model learns an accidental clue in the data instead of the real thing.
+
+### Streamlit and code words
+
+- **Streamlit:** a Python library that turns a script into a web app. Each time you move a widget, **the whole script reruns** from top to bottom.
+- **Widget:** an interactive control (slider, radio button, dropdown, toggle).
+- **Cache (`@st.cache_data`):** remembers the result of a slow function so reruns are fast.
+- **Session state:** a small dictionary Streamlit keeps for each browser tab (we store the "show tables" toggle there).
+- **Plotly:** the charting library we use. It gives hover tooltips, zooming and legends for free.
+- **Virtual environment (`.venv`):** a private folder of Python libraries for this project only, so it can't clash with other projects.
+- **Package (`noisedx/`):** a folder of Python files you can `import` from anywhere in the project.
+- **Colormap:** the mapping from numbers to colours in a heatmap. **Cividis** is designed to read the same for people with colour-vision deficiency (**CVD**, colour blindness).
+
+---
+
+## Part 2 · Running it yourself
+
+Open the Terminal app and paste these lines one at a time.
+
+```
+cd "/Users/mbp-23/Documents/DABI/School/1 Master's Program/GWU Class Stuff/9 DATS 6401/Midterm Project"
+.venv/bin/streamlit run app/streamlit_app.py
+```
+
+Your browser opens at `http://localhost:8501` (the number may differ; Terminal prints it). Press **Ctrl + C** in Terminal to stop it.
+
+Everything is already downloaded and built on your Mac. On a **fresh computer** (for example, if the professor wants to reproduce it) the full recipe is:
+
+```
+python3 -m venv .venv                     # make the private library folder
+source .venv/bin/activate                 # switch into it
+pip install -r requirements.txt           # install the libraries listed in requirements.txt
+python scripts/download_data.py           # download ~770 MB of audio into data/raw/
+python scripts/build_dataset.py           # make 1,500 clips (~2 minutes)
+streamlit run app/streamlit_app.py        # start the app
+pytest -q                                 # optional: run the two automatic checks
+```
+
+> Careful: `data/raw/` (the 770 MB of downloads) is not saved in git because it's too big. `data/processed/` (the 21 MB result) *is* saved, so the app works right after cloning even without re-downloading.
+
+---
+
+## Part 3 · The data story (what actually happens in `build_dataset.py`)
+
+### Step 1: Get real audio
+
+`scripts/download_data.py` downloads two free public datasets:
+
+| Dataset | What it is | What we use it for |
+|---|---|---|
+| **Mini LibriSpeech** (dev-clean-2) | 1,089 recordings of people reading audiobooks; 26 speakers; clean studio-ish quality | the **clean speech** |
+| **ESC-50** | 2,000 five-second environmental sound clips in 50 categories (40 per category), originally from the Freesound website | **real wind** (category "wind") and **real background noise** (vacuum cleaner, washing machine, engine, airplane, train, rain, hand saw, clock tick, keyboard typing) |
+
+Hum and clipping don't need recordings; code makes them.
+
+### Step 2: Split speakers
+
+The 26 speakers are shuffled (with a fixed random **seed**, 6401, so it shuffles the same way every time):
+
+- **8 speakers → test split.** 20% of clips per class (30 of 150) use only these speakers.
+- **18 speakers → training split** for the diverse strategy.
+- **4 of those 18 → training split** for the narrow strategy.
+
+### Step 3: Make each clip
+
+For each strategy (narrow, diverse), each class (5), and 150 clips per class, so 2 × 5 × 150 = **1,500 clips**:
+
+1. Pick a speech recording. Cut out its **loudest 3-second window** (`loudest_window` in `noisedx/audio_io.py`).
+2. **Peak-normalise** it: scale it so the peak is 0.9. This makes every clip start equally loud.
+3. Add the defect (`noisedx/defects.py`):
+
+| Class | Narrow (always the same) | Diverse (randomised each clip) |
+|---|---|---|
+| clean | nothing added | nothing added |
+| wind | the *same one* ESC-50 wind recording, SNR 5 dB | any of the 40 wind recordings, SNR random from −5 to 15 dB |
+| hum | 60 Hz + 3 harmonics, SNR 10 dB | 50 *or* 60 Hz, 1–6 harmonics, SNR random 0–20 dB |
+| clipping | amplify +18 dB, cut at ±0.5 | amplify +8 to +30 dB, cut at ±0.3 to ±0.8 |
+| noise | the *same one* vacuum-cleaner recording, SNR 5 dB | any recording from 9 noise categories, SNR −5 to 15 dB |
+| *(all classes)* | no echo | 50% chance of simulated room echo (RT60 0.15–0.7 s) |
+
+4. **Peak-normalise again.** Why? Otherwise clipped clips might always be loudest and the class could be guessed from loudness alone. This "levels the playing field."
+5. Measure it: compute the **38 features** and the **64-band log-mel spectrogram**.
+6. For 4 test clips per class, also save the audio as a `.wav` file so the app can play it. These "showcase" clips use the **same 4 sentences** across every class, so you can compare one sentence with each defect.
+
+### Step 4: Save
+
+| File | What's in it |
+|---|---|
+| `data/processed/metadata.csv` | one row per clip: id, class, strategy, split, speaker, defect settings (SNR, hum frequency, etc.) |
+| `data/processed/features.csv` | one row per clip: id + the 38 feature numbers |
+| `data/processed/mels.npz` | all 1,500 spectrograms (each 64 rows × 130 time steps) |
+| `data/clips/showcase/...` | the playable example `.wav` files |
+| `data/clips/sources/...` | 3 clean speech clips and 4 background recordings for the "defect lab" |
+
+> Check yourself: why is it "1,500 clips" and not "1,500 speakers"? Because one speaker's recording can be reused for many clips with different defects. There are only 26 speakers.
+
+---
+
+## Part 4 · File-by-file tour of the code
+
+Here's the folder, and what each piece does:
+
+```
+Midterm Project/
+├── requirements.txt        list of libraries to install
+├── README.md               the narrative + how to run (for the grader)
+├── noisedx/                shared "toolbox" package (reused later for the final project)
+│   ├── config.py           all settings in one place
+│   ├── defects.py          functions that add hum / clipping / noise / echo
+│   ├── features.py         functions that compute the 38 features and spectrograms
+│   └── audio_io.py         functions that find and load audio files
+├── scripts/
+│   ├── download_data.py    step 1 (download)
+│   └── build_dataset.py    steps 2–4 (make clips, measure, save)
+├── app/
+│   ├── streamlit_app.py    the app's front door: title, sidebar, the 6 tabs
+│   ├── common.py           helpers every tab uses (load data, chart style, alt text)
+│   └── views/              one file per tab
+│       ├── story.py           tab 1
+│       ├── waveforms.py       tab 2 (time series)
+│       ├── spectrograms.py    tab 3 (images)
+│       ├── feature_space.py   tab 4 (tabular)
+│       ├── network.py         tab 5 (network)
+│       └── about.py           tab 6
+├── tests/test_app.py       two automatic checks
+├── data/                   downloads (raw/) and results (processed/, clips/)
+└── .streamlit/config.toml  app theme (light background, blue accent)
+```
+
+**Why split it like this?** The `noisedx/` toolbox has nothing to do with Streamlit. Your final project needs a server that receives a clip and computes the same 38 features, so it can just `import noisedx.features`. One function, used everywhere, means the numbers always match.
+
+### `noisedx/config.py`: the settings
+
+Every "magic number" lives here: sample rate (22,050), clip length (3 s), the 5 class names, plain-English descriptions, and the **accessibility colours**:
+
+```python
+CLASS_COLORS  = {"clean": "#2a78d6", "wind": "#1baf7a", "hum": "#eb6834",
+                 "clipping": "#e34948", "noise": "#6250d6"}
+CLASS_SYMBOLS = {"clean": "circle", "wind": "triangle-up", "hum": "square",
+                 "clipping": "x", "noise": "diamond"}
+CLASS_DASH    = {"clean": "solid", "wind": "dash", "hum": "dot", ...}
+```
+
+Each class gets a colour **and** a marker shape **and** a line style. So even someone who can't tell red from orange can tell an "x" from a square. **Change a colour here and it changes in every chart.**
+
+### `noisedx/defects.py`: making defects
+
+The key helper is `mix_at_snr(speech, noise, snr_db)`. In plain words: "turn the noise up or down until it's exactly `snr_db` decibels quieter than the speech, then add them together."
+
+```python
+gain = rms(speech) / (rms(noise) * 10 ** (snr_db / 20))
+return speech + gain * noise
+```
+
+`10 ** (snr_db / 20)` converts dB back into a plain ratio (20 dB → 10×).
+
+- `add_hum`: builds sine waves at the base frequency and its harmonics (each harmonic 0.6× as loud as the one before), then mixes them in with `mix_at_snr`.
+- `add_clipping`: amplifies, then `np.clip(x, -ceiling, ceiling)` flattens anything beyond the ceiling. That flattening *is* clipping.
+- `add_recording`: mixes a real wind or noise recording in with `mix_at_snr`.
+- `add_reverb`: makes a fake room echo (random noise that fades away exponentially) and blends it into the clip with `fftconvolve`. Convolution here just means "play the clip in that room."
+
+Each function takes `strategy` ("narrow" or "diverse") and picks fixed or random settings accordingly.
+
+### `noisedx/features.py`: measuring
+
+- `extract_features(y)` calls **librosa** (an audio-analysis library) for MFCCs, contrast, centroid, roll-off, flatness and ZCR, computes the crest factor by hand, and returns 38 numbers in a fixed order.
+- `feature_names()` returns the 38 names in the same order (used as CSV column headers).
+- `log_mel(y)` makes the 64-band spectrogram.
+- `frame_envelope(y)` gives the loudness (RMS in dB) every ~23 ms, used for the loudness chart in tab 2.
+
+### `noisedx/audio_io.py`: loading
+
+Finds all LibriSpeech `.flac` files, reads the ESC-50 spreadsheet (`esc50.csv`) of categories, loads audio at 22,050 Hz mono, and has `loudest_window` and `save_wav`.
+
+### `scripts/download_data.py`
+
+Downloads each dataset (trying backup "mirror" websites if one fails), unzips it into `data/raw/`, and skips anything already there. It uses **certifi** for security certificates, because the Python on your Mac didn't have them and the first download attempt failed.
+
+### `scripts/build_dataset.py`
+
+Steps 2–4 of Part 3. Options: `--per-class 150` (clips per class per strategy), `--seed 6401`, and `--save-audio` (save *every* clip as a wav, which you'll want for training a CNN later).
+
+### `app/streamlit_app.py`: the front door
+
+1. `st.set_page_config(...)` sets the browser-tab title and wide layout.
+2. If the processed data is missing, it shows the commands to build it and stops.
+3. The **sidebar** has the "Always show data tables" toggle and the accessibility notes.
+4. `st.tabs([...])` makes the 6 tabs. For each tab it calls that view's `render()` function. This is the **multi-tab design** requirement.
+
+### `app/common.py`: shared helpers
+
+- `load_tables()`, `load_mels()`: read the CSVs and the spectrogram file. They're cached so they load only once.
+- `refresh_cache_if_data_changed()`: if you rebuild the dataset, it throws away the old cache.
+- `style(fig, height, title)`: gives every Plotly chart the same look (white background, light grid, 14 px text, legend on top).
+- `alt_text(text)`: prints "**Chart description:** …" under a chart. Streamlit charts can't carry real HTML alt text, so we write it as visible text that screen readers can read.
+- `maybe_table(df)`: puts the chart's data in a fold-out table (or always shows it if the sidebar toggle is on).
+
+### The `views/` files
+
+Each one has a `render()` function that draws one tab. Part 5 goes through them chart by chart.
+
+---
+
+## Part 5 · Tab-by-tab tour (open the app now)
+
+For each chart: **what it shows → how to read it → the widget → what we learn → course connection.**
+
+### Tab 1 · The story (`story.py`)
+
+- Text that explains the problem, the four modalities, the five classes (each with a coloured stripe and a one-line description), and the narrow vs diverse idea.
+- **Grouped bar chart:** clips per class per strategy, all exactly 150. **Why show a boring chart?** It proves the data is **balanced**, so no class can "win" just by being common. That is honest communication, a week 2 design-principle theme.
+
+### Tab 2 · Time series: waveforms (`waveforms.py`)
+
+**Chart 1: Five stacked waveforms + zoom.**
+- Left column: the whole 3 seconds for each class (same sentence each time). Right column: a zoomed slice. The grey band on the left shows where the zoom is.
+- **Widgets:** *Strategy* (narrow/diverse), *Example clip* (1–4, a different sentence each), *Zoom window* slider (keep it about 50 ms wide).
+- **Read it:** clipping looks like a solid red block with flat tops. In the zoom, hum shows a regular wave; noise and wind look irregular.
+- **Audio players** under the chart let you *hear* each one.
+- **Small multiples:** the same chart repeated for each category with shared axes, so the eye compares shapes directly. That is a week 3 technique.
+
+**Chart 2: Loudness over time.** One line per class (different dash styles) showing RMS loudness in dB. Clean speech dips deeply in pauses between words, and defects "fill in" those dips. **Lesson:** most defects hide in the *quiet parts*.
+
+**Chart 3: Amplitude histograms.** For each class, a count of how many samples have each amplitude value (log scale, so small counts are visible). Clipping shows **two tall spikes at the ceiling**, thousands of samples squashed to the same value. That spike is *why* crest factor is a good clipping feature.
+
+**Defect lab.** Choose a speaker, a defect and a strength, and the waveform, audio and crest factor update instantly. Try clipping with gain 0, then 30: the crest factor drops from about 5.5 to about 1.2. This is the most interactive part, good for a live demo.
+
+### Tab 3 · Images: spectrograms (`spectrograms.py`)
+
+**Chart 1: Montage.** A grid of spectrograms with 5 rows (classes) by 2–6 columns (examples).
+- **Widgets:** strategy, colour map (Cividis/Viridis/Magma/Grayscale), examples per class.
+- **Read it:** speech appears as bright vertical bursts (syllables) with stacked horizontal stripes (the voice's harmonics). **Hum** = a perfectly straight bright line at the very bottom. **Wind** = a smudge in the low rows. **Noise** = everything brighter, gaps filled. **Clipping** = extra brightness in the upper rows.
+- Each image is scaled so its loudest point is 0 dB, and the colour range is fixed at −80 to 0 dB for every image, so colours mean the same thing everywhere. That is a truthful-encoding principle.
+- **Course connection:** week 8 "image collections, grids and montages." A CNN (the optional model in your proposal) would look at exactly these pictures.
+
+**Chart 2: Class averages / difference from clean.**
+- *Average spectrogram:* average all 150 clips of a class. The words blur away, and **what's left is the defect itself**.
+- *Difference from clean:* subtract the clean average. **Red = more energy than clean, blue = less, white = the same.** This is a **diverging colour scale** (two colours with a neutral middle), the right choice when values can be above or below a meaningful zero.
+
+**Chart 3: Frequency profile.** Average energy at each pitch (x-axis on a log scale, because pitch perception is logarithmic).
+- *All classes:* one line per class.
+- *Narrow vs diverse:* pick a class and see two lines with **shaded bands (± 1 SD)**. The diverse band is wider, which shows variety visually. Showing spread with a band is week 4's "uncertainty" topic.
+
+**The yellow warning box (important!).** Look at the top of the clean spectrograms: they're **dark above about 8 kHz**. LibriSpeech was recorded at 16,000 samples per second, and a recording can only capture pitches up to half its sample rate, which is 8 kHz. The ESC-50 noise recordings go higher. A model could therefore learn "bright at the top = defect," which is a **shortcut** that would fail on real recordings. This is a genuine finding to bring to your ML teammate.
+
+### Tab 4 · Tabular: feature space (`feature_space.py`)
+
+**Chart 1: Box plots of one feature.**
+- **Widget:** pick any of the 38 features (the 5 most physical ones come first). A blue info box explains it in plain English.
+- **How to read a box plot:** the line in the box is the **median** (middle value); the box covers the middle 50% of clips; the whiskers reach the typical range; dots are outliers.
+- Narrow on the left, diverse on the right, same y-axis so they're comparable.
+- **Try:** `crest_factor` has clipping far below everyone else. `zcr` has noise sitting high.
+
+**Chart 2: Heatmap of all 38 features × 5 classes.** Each cell = the class's average **z-score** for that feature. Red = above the overall average, blue = below. One glance shows each class's "signature" across all 38 numbers. That is week 3: heatmaps and multivariate comparison.
+
+**Chart 3: Pair plot.** Every pair of 4 key features plotted against each other, with each class in its own colour **and shape**. Shows whether two features together already separate the classes. That is week 3: pair plots.
+
+**Chart 4: 2-D map (PCA or t-SNE).**
+- **Widgets:** Method (PCA/t-SNE), Colour by (Class/Strategy).
+- Narrow (left): tight, well-separated clouds. The task *looks* easy. Diverse (right): clouds spread and overlap. The task looks harder, but closer to real life.
+- Colour by Strategy: the diverse points surround the narrow ones. **That is H2 in one picture**: diverse training data covers more ground, so real recordings are more likely to land inside it.
+
+**Chart 5: Spread bar chart.** For each class, the average distance from each clip to its class's centre (in standardised units). Diverse is about **1.6× more spread out** on average. This turns the scatter-plot impression into a number.
+
+### Tab 5 · Network: feature links (`network.py`)
+
+**Chart 1: Feature correlation network.**
+- **Nodes** = the 38 features, arranged in a circle. **Edges** = a line between two features whose correlation is at least the slider value (default 0.5). Grey solid = positive, red dotted = negative.
+- **Node size** = ANOVA F-score (bigger = better at separating classes). **Node colour** = community (group) found by greedy modularity.
+- **Widgets:** strategy, correlation threshold.
+- **Read it:** features in the same coloured arc mostly measure the same thing, so they're **redundant**. A big node with few links carries unique information.
+- The **metrics row** shows number of links, number of groups, and the most connected feature.
+- **Course connection:** week 6 networks: node/edge encoding, centrality, community detection.
+
+**Chart 2: Class confusability network.**
+- **Nodes** = the 5 classes (each with its colour + shape). **Edge thickness and %** = how often a clip's k nearest neighbours belong to the *other* class.
+- **Widgets:** strategy, k (number of neighbours).
+- **Read it:** a thick edge means "these two classes look alike in the 38 numbers," so a classifier will probably confuse them. In the diverse data the thickest is **wind ↔ noise**. When your ML project produces a confusion matrix, you can check whether it matches this prediction.
+- Narrow: about 96% of neighbours are the same class. Diverse: about 71%. Variety makes classes overlap.
+
+### Tab 6 · Data & method (`about.py`)
+
+Sources and licences, the method in 4 steps, the accessibility choices, the reproduce commands, a **Download CSV** button for the full feature table, and the AI-use statement.
+
+---
+
+## Part 6 · How each mid-term requirement is met
+
+| Requirement | Where it's satisfied |
+|---|---|
+| ≥ 3 complex modalities | **4**: time series (tab 2), images (tab 3), tabular/multivariate (tab 4), network (tab 5) |
+| Real-world dataset | real LibriSpeech speech + real ESC-50 wind and noise recordings |
+| Interactive Streamlit app: layout | wide layout, sidebar, columns, dividers, expanders |
+| Interactive Streamlit app: widgets | radio buttons, dropdowns, sliders (incl. a range slider), toggle, audio players, download button, hover tooltips |
+| Interactive Streamlit app: narrative | each section: **Question → chart → "What we see"**; story tab; README |
+| Multi-tab design | `st.tabs` with 6 tabs |
+| Accessibility: colour | CVD-checked palette + shapes + dashes; cividis colormap; diverging map with neutral midpoint |
+| Accessibility: labelling | axis titles with units, 14 px text, plain-English definitions |
+| Accessibility: alt text | "Chart description" under every chart + table views + "show all tables" toggle |
+| Reproducible code base | `requirements.txt`, download script, build script with fixed seed, README, tests, git repo |
+
+---
+
+## Part 7 · Things you'll probably want to change
+
+| You want to… | Do this |
+|---|---|
+| Change wording on a tab | edit the text in that tab's file in `app/views/` |
+| Change a class colour | edit `CLASS_COLORS` in `noisedx/config.py` |
+| Make more or fewer clips | `python scripts/build_dataset.py --per-class 300` |
+| Use different noise types | edit `ESC_NOISE` in `noisedx/config.py` (any ESC-50 category name), then rebuild |
+| Fix the 8 kHz shortcut | in `audio_io.load`, load at 16,000 Hz (or low-pass the defected clip at 8 kHz) before features, then rebuild |
+| Add your own real recordings | put wavs in a folder, load them with `noisedx.audio_io.load`, run `extract_features`, and add them to the scatter as a new "real" group. This is a strong addition for the final project. |
+
+After editing app files, refresh the browser page. If it doesn't update, stop the app (Ctrl + C) and start it again.
+
+---
+
+## Part 8 · Check yourself
+
+<details><summary>1. Why do we peak-normalise each clip a second time, after adding the defect?</summary>
+
+So loudness alone can't reveal the class. Without it, clipped clips (which were amplified) might always be the loudest, and a model could cheat.
+</details>
+
+<details><summary>2. A hum appears where in a spectrogram, and why there?</summary>
+
+As a thin straight horizontal line at the very bottom. Hum is one low pitch (50/60 Hz plus a few harmonics), so it's low on the y-axis, and it never changes, so it's straight across time.
+</details>
+
+<details><summary>3. Why does clipping lower the crest factor?</summary>
+
+Crest factor = peak ÷ RMS. Clipping cuts the peaks down to the ceiling while the average level stays high (more samples sit near the ceiling), so the ratio shrinks.
+</details>
+
+<details><summary>4. What is the difference between the narrow and diverse strategies, and which hypothesis do they test?</summary>
+
+Narrow uses the same speakers, the same noise recording and fixed strengths. Diverse randomises speakers, recordings, strength and room echo. They test H2: diverse synthetic training data should transfer better to real recordings.
+</details>
+
+<details><summary>5. In the PCA chart, narrow classes separate more cleanly. Does that mean narrow data is better?</summary>
+
+No. Narrow data is easier *because* it's unrealistically uniform. A model trained on it may do great on similar fake data but fail on real audio. Diverse data is harder but covers the variety real recordings have.
+</details>
+
+<details><summary>6. Why use a diverging (red–white–blue) colour scale for the "difference from clean" view but cividis for the spectrograms?</summary>
+
+Differences have a meaningful zero (no change), with values above and below it, so you need two hues and a neutral middle. Spectrogram energy just goes from low to high, so a one-direction (sequential) scale fits.
+</details>
+
+<details><summary>7. What is the 8 kHz shortcut, and how would you fix it?</summary>
+
+Clean LibriSpeech has no energy above 8 kHz (it was recorded at 16 kHz), but the noise recordings and clipping do. A model could learn "high-pitch energy = defect." Fix it by resampling or low-pass filtering every clip to 8 kHz before computing features.
+</details>
+
+<details><summary>8. What does a thick edge in the class confusability network mean?</summary>
+
+Clips of those two classes are often each other's nearest neighbours in the 38-feature space, so they look alike and a classifier will probably confuse them.
+</details>
+
+<details><summary>9. Why are the alt texts written as visible captions instead of hidden HTML?</summary>
+
+Streamlit/Plotly charts don't support an alt attribute. A visible "Chart description" is readable by screen readers and also helps sighted readers.
+</details>
+
+---
+
+## Part 9 · From mid-term to final project
+
+The final project needs (1) a trained model behind a **FastAPI** server (a small web service that receives requests and sends back answers) and (2) a Streamlit app that talks to it. The pieces you already have:
+
+1. **Train**: use `data/processed/features.csv` (or `--save-audio` wavs) to train the Random Forest / SVM from your ML project, and save it with `joblib`.
+2. **Serve**: a new `server/main.py` with one endpoint, `POST /predict`. It receives a wav, calls `noisedx.features.extract_features`, runs the model, and returns the predicted class, the probability for each class, and how long it took.
+3. **Show**: a new tab in this app. Upload or record a clip, send it to the server, and display the probabilities as a bar chart, the clip's spot on the PCA map, and its spectrogram.
+
+Same `noisedx` code everywhere means the features at training time and at prediction time are guaranteed to match.
+
+---
+
+## Say it in your presentation
+
+- "I looked at the same audio through four modalities: waveforms over time, spectrogram images, a 38-feature table, and correlation and similarity networks."
+- "Each defect has a signature: clipping flattens waveform peaks and lowers crest factor, hum is a straight line at the bottom of the spectrogram, wind is low-frequency haze, and noise raises the whole floor."
+- "Diverse augmentation spreads every class out by about 1.6 times. That's harder to learn but covers more real-world variety, which is the bet behind my ML project's hypothesis H2."
+- "The visualisations also caught a data problem: the clean speech has nothing above 8 kHz, so a model could take a shortcut. I'll band-limit all audio before training."
+- "For accessibility, colour is never the only cue. Every class also has a marker shape and line style, colour maps are colour-blind safe, and every chart has a text description and a table view."
+</script>
+<script>
+(function () {
+  var src = document.getElementById('md').textContent;
+  var math = [];
+  function keep(m) { math.push(m); return '@@MATH' + (math.length - 1) + '@@'; }
+  src = src.replace(/\$\$[\s\S]+?\$\$/g, keep);
+  src = src.replace(/\$[^\$\n]+?\$/g, keep);
+  var out = marked.parse(src);
+  out = out.replace(/@@MATH(\d+)@@/g, function (m, i) {
+    return math[+i].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  });
+  var el = document.getElementById('content');
+  el.innerHTML = out;
+  el.querySelectorAll('blockquote').forEach(function (b) {
+    if (/^\s*(Watch out|Common mistake|Careful)/i.test(b.textContent)) b.classList.add('warn');
+  });
+  renderMathInElement(el, { delimiters: [
+    {left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}],
+    throwOnError: false });
+})();
+</script>
+</body>
+</html>

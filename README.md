@@ -44,7 +44,7 @@ pytest -q                           # smoke tests (feature shape, every tab rend
 
 | Source | Used for | Licence |
 |---|---|---|
-| [Mini LibriSpeech dev-clean-2](https://www.openslr.org/31/) | Clean speech, 40 speakers (8 held out as a speaker-disjoint test split) | CC BY 4.0 |
+| [Mini LibriSpeech dev-clean-2](https://www.openslr.org/31/) | Clean speech, 26 speakers (8 held out as a speaker-disjoint test split) | CC BY 4.0 |
 | [ESC-50](https://github.com/karolpiczak/ESC-50) | Real wind (40 clips) and background noise (vacuum, washing machine, engine, airplane, train, rain, hand saw, clock, keyboard) | CC BY-NC 3.0 |
 | `noisedx/defects.py` | Synthetic hum (50/60 Hz + harmonics), clipping, simulated room echo | own code |
 
@@ -52,7 +52,7 @@ The ML proposal names VCTK (~11 GB). Mini LibriSpeech (126 MB) keeps the mid-ter
 the loader in `noisedx/audio_io.py` would change to swap VCTK in.
 
 **Narrow vs diverse.** Narrow uses 4 training speakers, one wind and one vacuum-cleaner recording, 60 Hz hum with 3
-harmonics at 10 dB SNR, and fixed clipping (+18 dB into a 0.5 ceiling). Diverse uses all 32 training speakers, every
+harmonics at 10 dB SNR, and fixed clipping (+18 dB into a 0.5 ceiling). Diverse uses all 18 training speakers, every
 wind file, nine noise categories, random SNR (−5 to 15 dB), 50 or 60 Hz hum with 1–6 harmonics, random clipping, and
 synthetic room echo on half the clips. Class counts are identical.
 
@@ -75,6 +75,7 @@ noisedx/            shared package (reused by the final project and the CSCI 636
 scripts/            download_data.py, build_dataset.py
 app/                streamlit_app.py + views/ (one module per tab) + common.py
 tests/              pytest smoke tests
+docs/               Guide_How_The_App_Works.html (beginner walkthrough of every file and chart)
 ```
 
 ### Extending to the final project (client-server ML app)

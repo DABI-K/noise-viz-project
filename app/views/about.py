@@ -13,7 +13,7 @@ def render() -> None:
         """
 | Source | What it gives | Licence |
 |---|---|---|
-| [Mini LibriSpeech, dev-clean-2](https://www.openslr.org/31/) (OpenSLR 31) | Clean read English speech, 40 speakers | CC BY 4.0 |
+| [Mini LibriSpeech, dev-clean-2](https://www.openslr.org/31/) (OpenSLR 31) | Clean read English speech, 26 speakers | CC BY 4.0 |
 | [ESC-50](https://github.com/karolpiczak/ESC-50) (Piczak, 2015) | Real wind, appliance, engine, rain and other recordings (originally from Freesound) | CC BY-NC 3.0 |
 | Our own code (`noisedx/defects.py`) | Mains hum (50/60 Hz + harmonics), digital clipping, simulated room echo | - |
 

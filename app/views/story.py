@@ -44,7 +44,7 @@ The ML project's second hypothesis (H2) is that **varied** fake training data tr
 than **narrow** fake data. So every clip here was made under one of two strategies with the same class balance:
 
 * **Narrow:** 4 speakers, one wind recording, one vacuum-cleaner recording, fixed hum (60 Hz) and clipping strength.
-* **Diverse:** 32 speakers, all 40 wind recordings, nine kinds of background noise, random strength, 50 or 60 Hz hum, and
+* **Diverse:** 18 speakers, all 40 wind recordings, nine kinds of background noise, random strength, 50 or 60 Hz hum, and
   simulated room echo on half of the clips.
 
 Eight more speakers are held out as a speaker-disjoint *test* split, as the proposal requires.
