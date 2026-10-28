@@ -61,7 +61,7 @@ on half the clips. Class counts are identical.
 
 * The five class colours were checked for colour-vision deficiency (worst adjacent ΔE 9.2, deuteranopia). Colour is
   never the only cue: marker shapes, line dashes and text labels repeat it.
-* Spectrograms default to *cividis*. Difference maps use a diverging red–blue scale centred on 0 dB.
+* Spectrograms default to *cividis*. Difference maps use a diverging red-and-blue scale centred on 0 dB.
 * Every chart has a written description (alt text) and a table view, and a sidebar toggle shows all the tables at once.
 * The theme is light, text is 14 px or larger, axis titles have units, and jargon is defined in plain English.
 
